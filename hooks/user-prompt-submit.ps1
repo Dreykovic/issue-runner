@@ -84,16 +84,13 @@ Le plugin issue-runner s'est déclenché sur ce prompt parce qu'il n'a pas été
 écarté par les fast filters (longueur >= 20, pas de slash command, pas une
 question pure, pas un mot de transition).
 
-AVANT TOUTE AUTRE ACTION sur ce prompt, tu dois :
-  1. Invoquer l'agent ``intent-classifier`` (via le tool Agent, subagent_type
-     ``general-purpose``, en lui donnant les instructions de l'agent défini
-     dans ``\${CLAUDE_PLUGIN_ROOT}/agents/intent-classifier.md``).
-  2. Lire sa décision JSON (NEW_ISSUE | EXISTING_ISSUE_N | MULTI | CONVERSATION | UNCLEAR).
-  3. Selon la décision, soit poursuivre la conversation normalement (CONVERSATION),
-     soit lancer le pipeline (le reste).
+AVANT TOUTE AUTRE ACTION sur ce prompt, invoque le skill
+``issue-runner-orchestration`` via le tool Skill. Ce skill contient la doctrine
+complète d'orchestration (Phase A → Phase 9). Suis-la strictement.
 
-Si la décision est UNCLEAR, demande explicitement à l'utilisateur :
-"S'agit-il d'une nouvelle issue à gérer ?" avant de continuer.
+Si pour une raison technique le skill n'est pas disponible, repli sur :
+  - Tool Agent avec ``\${CLAUDE_PLUGIN_ROOT}/agents/intent-classifier.md``
+  - Brancher selon la décision JSON retournée.
 </issue-runner-active>
 "@
 
