@@ -15,7 +15,7 @@
         "email": "dreybirewa@gmail.com"
       },
       "category": "development",
-      "source": ".",
+      "source": "./plugins/issue-runner",
       "homepage": "https://github.com/Dreykovic/issue-runner"
     }
   ]
