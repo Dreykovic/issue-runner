@@ -1,0 +1,15 @@
+# State runtime (ne pas commiter)
+.claude/runner-state/
+
+# Build / temp
+*.tmp
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editeurs
+.vscode/
+.idea/
+*.swp

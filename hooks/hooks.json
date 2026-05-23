@@ -1,0 +1,16 @@
+{
+  "description": "issue-runner — déclenche le pipeline si le prompt est un travail d'implémentation",
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${CLAUDE_PLUGIN_ROOT}/hooks/user-prompt-submit.ps1\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
