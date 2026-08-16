@@ -24,7 +24,7 @@ issue-runner/
 │   └── plugin.json                manifeste (name, description, author)
 ├── hooks/
 │   ├── hooks.json                 déclare le hook UserPromptSubmit
-│   └── user-prompt-submit.ps1     fast filter (<100ms, sans LLM)
+│   └── user-prompt-submit.js      fast filter (<100ms, sans LLM, Node.js)
 ├── skills/
 │   └── issue-runner-orchestration/
 │       └── SKILL.md               doctrine d'orchestration COMPLÈTE
@@ -40,10 +40,13 @@ issue-runner/
 ├── commands/
 │   └── run.md                     slash /run (fallback manuel)
 ├── lib/
-│   ├── state.ps1                  gestion .claude/runner-state/
-│   └── gh-broker.ps1              wrapper gh CLI
+│   ├── config.js                  lecture .claude/issue-runner.config.json (repo cible)
+│   ├── state.js                   gestion .claude/runner-state/ (CLI Node)
+│   └── gh-broker.js               wrapper gh CLI (CLI Node)
 └── README.md
 ```
+
+Le plugin est écrit en Node.js pur (aucune dépendance npm) pour être installable tel quel sur n'importe quel projet, indépendamment de l'OS — seuls `node` et `gh` (authentifié) doivent être sur le PATH du repo cible.
 
 ## Comment ça s'active
 

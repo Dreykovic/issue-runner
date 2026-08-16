@@ -1,6 +1,6 @@
 {
   "name": "issue-runner",
-  "description": "Pipeline auto-déclenché qui transforme chaque prompt non-trivial en flux complet : intent classification, optimisation, analyse de risque, création d'issue, branche, implémentation, tests, PR, review, merge.",
+  "description": "Pipeline auto-déclenché (cross-platform, Node.js) qui transforme chaque prompt non-trivial en flux complet : intent classification, optimisation, analyse de risque, création d'issue, branche, implémentation, tests, PR, review, merge. Configurable par projet via .claude/issue-runner.config.json.",
   "author": {
     "name": "drey",
     "email": "dreybirewa@gmail.com"

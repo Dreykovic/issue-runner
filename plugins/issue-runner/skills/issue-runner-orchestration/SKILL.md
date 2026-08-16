@@ -1,7 +1,7 @@
 ---
 name: issue-runner-orchestration
 description: Use this skill when you see `<issue-runner-active>` in a system message, OR when the user invokes `/run`, OR whenever you need to orchestrate the issue-runner pipeline (intent classification, prompt optimization, risk analysis, implementation in worktree, regression check, tests, PR creation, review, merge). This skill contains the complete orchestration doctrine for the issue-runner plugin.
-version: 1.0.0
+version: 2.0.0
 ---
 
 # issue-runner — orchestration
@@ -9,6 +9,8 @@ version: 1.0.0
 Tu es maintenant en mode orchestrateur `issue-runner`. Tu DOIS suivre cette doctrine **avant toute autre action sur le prompt utilisateur** dès que tu vois `<issue-runner-active>` dans un system message, ou quand l'utilisateur invoque `/run`.
 
 > ⚠️ Si tu N'AS PAS été activé (pas de marqueur, pas d'invocation /run), ignore complètement ce skill.
+
+Ce plugin est **cross-platform** (Node.js, pas de dépendance OS) et **agnostique du stack** du projet cible. Il s'installe dans n'importe quel repo ; les seuls prérequis sont `node` et `gh` (authentifié) sur PATH.
 
 ---
 
@@ -50,7 +52,39 @@ Tu es maintenant en mode orchestrateur `issue-runner`. Tu DOIS suivre cette doct
    └──────────────────────────┘
 ```
 
-Persiste l'état après chaque phase dans `.claude/runner-state/issue-<N>/state.json` via les fonctions de `${CLAUDE_PLUGIN_ROOT}/lib/state.ps1`.
+Persiste l'état après chaque phase dans `.claude/runner-state/issue-<N>/state.json` du **repo cible** via `node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" <command> ...` (Bash tool). Tous les outputs de `state.js` et `gh-broker.js` sont du JSON sur stdout — parse-le pour brancher.
+
+---
+
+## Configuration par projet (optionnelle)
+
+Avant Phase A, si un fichier `.claude/issue-runner.config.json` existe dans le repo cible, charge-le :
+
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/config.js"
+```
+
+Champs supportés (tous optionnels, defaults entre parenthèses) :
+
+```json
+{
+  "baseBranch": "main",
+  "issueLabels": ["issue-runner"],
+  "mergeStrategy": "squash",
+  "maxParallelFeatures": 3,
+  "maxRetriesPerPhase": 2,
+  "testCommand": null
+}
+```
+
+- `baseBranch` : branche depuis laquelle créer les branches runner et cibler les PR.
+- `issueLabels` : labels appliqués aux issues créées par le runner.
+- `mergeStrategy` : `merge` | `squash` | `rebase`, utilisé par défaut en Phase 9.
+- `maxParallelFeatures` : cap sur le nombre de cycles MULTI en parallèle.
+- `maxRetriesPerPhase` : nombre de retries avant `failed`.
+- `testCommand` : si défini, **remplace** la détection automatique du stack en Phase 6 (utile pour un monorepo ou une commande non standard, ex. `"pnpm --filter api test"`).
+
+Si le fichier n'existe pas ou est invalide, les defaults ci-dessus s'appliquent silencieusement — le plugin fonctionne sans aucune config.
 
 ---
 
@@ -75,7 +109,8 @@ PROMPT UTILISATEUR À CLASSIFIER :
 Lis MEMORY.md (chemin auto-memory), CLAUDE.md du repo courant (si présent),
 puis exécute `gh issue list --state open --limit 30 --json number,title,labels,body`.
 
-Liste également les états runner actifs avec `Get-ActiveRunnerStates` (lib/state.ps1)
+Liste également les états runner actifs avec :
+  node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" list-active
 pour détecter les issues en cours.
 
 Produis EXCLUSIVEMENT le bloc JSON conforme au schéma défini dans ton agent .md.
@@ -121,7 +156,7 @@ Produis le JSON conforme à ton schéma.
 
 **Sinon** : pour chaque entrée de `features[]`, lance un cycle complet Phases 1→9 **en parallèle** (un tool Agent call par feature en parallèle) si `split_strategy: parallel`. Si `sequential`, en série en respectant `depends_on`.
 
-> ⚠️ Limite à **3 cycles parallèles maximum** simultanément pour éviter de saturer le contexte. Si N > 3, batche par groupes de 3.
+> ⚠️ Limite au `maxParallelFeatures` de la config (3 par défaut) le nombre de cycles parallèles simultanés pour éviter de saturer le contexte. Si N > la limite, batche par groupes.
 
 ---
 
@@ -146,10 +181,9 @@ Produis le JSON spec conforme à ton schéma.
 ```
 
 **Persistance** :
-```powershell
-. ${CLAUDE_PLUGIN_ROOT}/lib/state.ps1
-Set-RunnerStateArtifact -IssueNumber <N> -Key "spec" -Value <spec_json>
-Update-RunnerStatePhase -IssueNumber <N> -Phase "optimize" -Agent "prompt-optimizer" -Result "ok"
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key spec --value '<spec_json>'
+node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" update-phase --issue <N> --phase optimize --agent prompt-optimizer --result ok
 ```
 
 **Gate utilisateur** : si la spec a des `open_questions[]` non-vides ET `estimated_complexity` ≥ `medium`, **demande à l'utilisateur** de répondre aux questions avant Phase 2.
@@ -160,7 +194,10 @@ Update-RunnerStatePhase -IssueNumber <N> -Phase "optimize" -Agent "prompt-optimi
 
 **Invocation** : même pattern, passer `spec` du Phase 1 en input.
 
-**Persistance** : `Set-RunnerStateArtifact ... -Key "risk_analysis"`.
+**Persistance** :
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key risk_analysis --value '<risk_json>'
+```
 
 **Gate utilisateur** : si `needs_user_confirmation: true` dans le rapport → `AskUserQuestion` montrant `overall_risk_level`, `confirmation_reason` et la liste des risques `high+`. Options : {Continue, Modifier la spec, Abandon}.
 
@@ -169,20 +206,21 @@ Update-RunnerStatePhase -IssueNumber <N> -Phase "optimize" -Agent "prompt-optimi
 ## Phase 3 — setup (issue + branch + worktree)
 
 **Si NEW_ISSUE** :
-```powershell
-. ${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.ps1
-$slug = ConvertTo-IssueSlug -Title <spec.objective>
-$issue = New-RunnerIssue -Title <spec.objective> -Body <résumé spec + risks>
-$branch = New-RunnerBranch -IssueNumber $issue.number -Slug $slug
-. ${CLAUDE_PLUGIN_ROOT}/lib/state.ps1
-Initialize-RunnerState -IssueNumber $issue.number -Title <spec.objective> -Branch $branch
+```bash
+slug=$(node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" slug --title "<spec.objective>" | jq -r .slug)
+issue=$(node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" create-issue --title "<spec.objective>" --body "<résumé spec + risks>")
+issueNumber=$(echo "$issue" | jq -r .number)
+branch=$(node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" create-branch --issue "$issueNumber" --slug "$slug" | jq -r .branch)
+node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" init --issue "$issueNumber" --title "<spec.objective>" --branch "$branch"
 ```
 
+(Si `jq` n'est pas disponible sur la machine, parse le JSON toi-même à partir du stdout de la commande — c'est toujours un objet JSON unique.)
+
 **Si EXISTING_ISSUE_<N>** :
-```powershell
-$issue = Get-IssueByNumber -Number <N>
-# Si une branche runner/issue-<N>-* existe déjà → checkout dessus
-# Sinon → créer depuis main
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" get-issue --number <N>
+# Si une branche runner/issue-<N>-* existe déjà (git branch --list) → checkout dessus
+# Sinon → node lib/gh-broker.js create-branch --issue <N> --slug <slug> (depuis base branch)
 ```
 
 **Création du worktree** : utilise `Agent(isolation: worktree)` plus tard en Phase 4. Le worktree créé par l'Agent est éphémère et lié à un agent particulier.
@@ -215,11 +253,15 @@ JSON conforme à ton schéma.
 )
 ```
 
-**Récupération du diff** : à la fin du worktree, capturer `git diff main...HEAD` du worktree et le stocker en artifact `diff`.
+**Récupération du diff** : à la fin du worktree, capturer `git diff <baseBranch>...HEAD` du worktree et le stocker en artifact `diff`.
 
-**Retry** : si le rapport est `status: failed`, relance UNE fois avec les `blockers` injectés dans le prompt. Si la 2ème tentative échoue → état `failed`, escalate à l'utilisateur.
+**Retry** : si le rapport est `status: failed`, relance jusqu'à `maxRetriesPerPhase` fois (2 par défaut) avec les `blockers` injectés dans le prompt. Au-delà → état `failed`, escalate à l'utilisateur.
 
-**Persistance** : `Set-RunnerStateArtifact ... -Key "implementer_report"` + diff.
+**Persistance** :
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key implementer_report --value '<json>'
+node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key diff --value "$(git diff <base>...HEAD)"
+```
 
 ---
 
@@ -240,28 +282,43 @@ JSON conforme à ton schéma.
 
 L'agent écrit les tests **dans le worktree** (réutilise le worktree de Phase 4 via `Agent(isolation: worktree)` avec le même chemin si possible).
 
-**Exécution des tests** (l'orchestrateur lance les commandes, pas l'agent) :
-```bash
-# détection du stack via fichiers du repo :
-# package.json + pnpm → pnpm --filter <app> test
-# pubspec.yaml → flutter test
-# (autres patterns à étendre)
-```
+**Détermination de la commande de test** :
 
-**Si rouge** : retour Phase 4 avec les failed_tests injectés. Compteur retry +1. Maximum 2 retries → état `failed`.
+1. Si `testCommand` est défini dans `.claude/issue-runner.config.json` → utilise-le tel quel.
+2. Sinon, détecte le stack en inspectant les fichiers à la racine du repo cible (worktree), dans cet ordre :
+
+| Fichiers présents | Commande |
+|---|---|
+| `pnpm-lock.yaml` | `pnpm test` |
+| `yarn.lock` | `yarn test` |
+| `bun.lockb` / `bun.lock` | `bun test` |
+| `package-lock.json` ou `package.json` (fallback) | `npm test` |
+| `pubspec.yaml` | `flutter test` |
+| `Cargo.toml` | `cargo test` |
+| `go.mod` | `go test ./...` |
+| `pytest.ini` / `pyproject.toml` avec `[tool.pytest...]` / `setup.cfg` avec `pytest` | `pytest` |
+| `requirements.txt` sans config pytest explicite | `python -m pytest` (best-effort) |
+| `Gemfile` avec `rspec` en dépendance | `bundle exec rspec` |
+| `pom.xml` | `mvn test` |
+| `build.gradle` / `build.gradle.kts` | `./gradlew test` |
+| `*.csproj` / `*.sln` | `dotnet test` |
+
+3. Si aucun pattern ne matche, ou en cas de doute (plusieurs lockfiles au même niveau, monorepo), **demande à l'utilisateur** quelle commande utiliser plutôt que de deviner, et propose de la sauvegarder dans `testCommand` pour les prochaines fois.
+
+**Exécution** : l'orchestrateur lance la commande choisie lui-même (Bash tool, dans le worktree), pas l'agent.
+
+**Si rouge** : retour Phase 4 avec les failed_tests injectés. Compteur retry +1, jusqu'à `maxRetriesPerPhase` → état `failed`.
 
 ---
 
 ## Phase 7 — PR creation
 
 **Invocation** :
-```powershell
-. ${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.ps1
-$pr = New-RunnerPullRequest `
-  -IssueNumber <N> `
-  -Title <spec.objective> `
-  -Body @"
-## Résumé
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" create-pr \
+  --issue <N> \
+  --title "<spec.objective>" \
+  --body "## Résumé
 <diff_summary de l'implementer>
 
 ## Changements
@@ -274,13 +331,15 @@ $pr = New-RunnerPullRequest `
 <risks de risk-analyzer en synthèse>
 
 ## Décisions notables
-<decisions + deviations_from_spec de l'implementer>
-"@
+<decisions + deviations_from_spec de l'implementer>"
 ```
 
 **Avant de créer la PR** : commiter le diff du worktree depuis le worktree (utilisateur n'a PAS encore validé — c'est ok, c'est sur une branche dédiée non-mergée). Commit message conventional : `feat:`/`fix:`/`refactor:` selon le scope.
 
-**Persistance** : `Set-RunnerStateArtifact ... -Key "pr_url" ...`
+**Persistance** :
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key pr_url --value "<url>"
+```
 
 ---
 
@@ -305,25 +364,29 @@ gh api repos/:owner/:repo/pulls/<N>/comments \
 ## Phase 9 — merge
 
 **Toujours** demander confirmation utilisateur via `AskUserQuestion` :
-> "PR #<N> approuvée par le runner. Verdict : <résumé pr-reviewer>. Merger maintenant en `<strategy>` ?"
+> "PR #<N> approuvée par le runner. Verdict : <résumé pr-reviewer>. Merger maintenant en `<mergeStrategy>` ?"
 > Options : {Merger maintenant, Voir le diff d'abord, Pas maintenant}.
 
 Si "Voir le diff" → afficher `gh pr diff <N>` + reposer la question.
 Si "Pas maintenant" → état `done_unmerged`, l'utilisateur mergera à la main.
 
 Si "Merger maintenant" :
-```powershell
-Merge-RunnerPullRequest -Number <N> -Strategy <strategy_recommandée>
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" merge-pr --number <N> --strategy <mergeStrategy>
 ```
 
-**Persistance finale** : `Update-RunnerStatePhase -Phase "done"`. La branche est supprimée automatiquement par `gh pr merge --delete-branch`.
+**Persistance finale** :
+```bash
+node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" update-phase --issue <N> --phase done --agent orchestrator --result merged
+```
+La branche est supprimée automatiquement par `gh pr merge --delete-branch`.
 
 ---
 
 ## Reprise (resume) — EXISTING_ISSUE_<N>
 
 Quand intent-classifier décide `EXISTING_ISSUE_<N>` :
-1. `Get-RunnerState -IssueNumber <N>` pour récupérer l'état persisté
+1. `node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" get --issue <N>` pour récupérer l'état persisté
 2. Si état trouvé → reprendre à `state.phase + 1`. Récupérer les artifacts du state.json pour ne PAS rerun les phases déjà faites.
 3. Si pas d'état (issue créée hors du runner) → traiter comme NEW_ISSUE mais sans recréer l'issue ni la branche (réutiliser celles existantes).
 
@@ -331,13 +394,14 @@ Quand intent-classifier décide `EXISTING_ISSUE_<N>` :
 
 ## Règles d'or de l'orchestrateur
 
-1. **Une seule phase active à la fois** par pipeline. Sauf en MULTI où c'est N pipelines en parallèle.
+1. **Une seule phase active à la fois** par pipeline. Sauf en MULTI où c'est N pipelines en parallèle (cap `maxParallelFeatures`).
 2. **Aucun commit/merge automatique** sans validation utilisateur explicite en v1.
-3. **Retry maximum 2 fois** par phase. Au 3ème échec → état `failed`, remonter à l'utilisateur avec le contexte complet.
-4. **Si l'utilisateur interrompt** avec un nouveau prompt (intent-classifier sur le nouveau prompt déclenche), sauvegarder l'état courant (`Update-RunnerStatePhase -Phase "paused"`) avant de basculer.
+3. **Retry maximum `maxRetriesPerPhase`** (2 par défaut) par phase. Au-delà → état `failed`, remonter à l'utilisateur avec le contexte complet.
+4. **Si l'utilisateur interrompt** avec un nouveau prompt (intent-classifier sur le nouveau prompt déclenche), sauvegarder l'état courant (`update-phase --phase paused`) avant de basculer.
 5. **Toujours notifier l'utilisateur** en 1 ligne à chaque transition de phase. Ex: "Phase 4 : implementer démarré dans worktree…"
 6. **Coût** : ~$0.20-$0.50 par pipeline complet (Haiku pour intent/optim/split, Sonnet pour le reste). À surveiller.
 7. **Timeout par phase** : 5 min Haiku, 15 min Sonnet, 30 min implementer (worktree). Au-delà → kill + retry.
+8. **Ne jamais deviner un prérequis manquant** : si `gh` n'est pas authentifié (`node lib/gh-broker.js check` → `ghAvailable: false`) ou si `node` n'est pas sur PATH côté hook (peu probable puisque tu es toi-même Claude Code, mais vérifie si les commandes lib/*.js échouent), arrête-toi et informe l'utilisateur au lieu de tenter un contournement.
 
 ## Anti-patterns à éviter
 
@@ -345,7 +409,8 @@ Quand intent-classifier décide `EXISTING_ISSUE_<N>` :
 - ❌ Skipper une phase parce qu'elle "semble facile" — chaque phase a son rôle
 - ❌ Commiter ou push depuis Claude main (uniquement depuis le worktree de l'implementer)
 - ❌ Mergez sans confirmation utilisateur
-- ❌ Boucler indéfiniment sur retry — respecter le seuil de 2
+- ❌ Boucler indéfiniment sur retry — respecter `maxRetriesPerPhase`
 - ❌ Ignorer `needs_user_confirmation: true` du risk-analyzer
 - ❌ Mélanger les pipelines en MULTI (chaque feature a SON état, SA branche, SA PR)
 - ❌ Oublier de persister l'état entre phases — interdit de continuer si la phase précédente n'est pas marquée complete dans state.json
+- ❌ Deviner la commande de test sans consulter `testCommand` de la config ni détecter le stack — et sans demander en cas d'ambiguïté

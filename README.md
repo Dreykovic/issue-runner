@@ -61,7 +61,7 @@ issue-runner/
 │   └── plugin.json              manifeste
 ├── hooks/
 │   ├── hooks.json               déclare UserPromptSubmit
-│   └── user-prompt-submit.ps1   fast filter (sans LLM, <100ms)
+│   └── user-prompt-submit.js    fast filter (sans LLM, <100ms)
 ├── agents/
 │   ├── intent-classifier.md     décide run/skip/ask
 │   ├── prompt-optimizer.md      (Build-2)
@@ -73,33 +73,55 @@ issue-runner/
 │   └── prompt-splitter.md       (Build-3)
 ├── commands/
 │   └── run.md                   slash command de secours
-├── lib/
-│   ├── state.ps1                gestion de .claude/runner-state/
-│   └── gh-broker.ps1            wrapper gh CLI
-└── CLAUDE.md                    instructions pour Claude quand le plugin est actif
+├── skills/
+│   └── issue-runner-orchestration/SKILL.md   doctrine d'orchestration complète
+└── lib/
+    ├── config.js                lecture de .claude/issue-runner.config.json
+    ├── state.js                 gestion de .claude/runner-state/
+    └── gh-broker.js             wrapper gh CLI
 ```
+
+## Cross-platform
+
+Le plugin est écrit en **Node.js pur** (aucune dépendance npm), pas en PowerShell : il tourne à l'identique sur Linux, macOS et Windows dès que `node` et `gh` (authentifié) sont sur le PATH. C'est ce qui le rend installable sur n'importe lequel de tes projets, quel que soit l'OS de la machine.
+
+## Configuration par projet
+
+Optionnel : dépose un `.claude/issue-runner.config.json` à la racine du repo cible pour ajuster le comportement sans toucher au plugin :
+
+```json
+{
+  "baseBranch": "main",
+  "issueLabels": ["issue-runner"],
+  "mergeStrategy": "squash",
+  "maxParallelFeatures": 3,
+  "maxRetriesPerPhase": 2,
+  "testCommand": null
+}
+```
+
+`testCommand` permet de forcer la commande de test (utile en monorepo) au lieu de laisser l'orchestrateur détecter le stack (npm/pnpm/yarn/bun, pytest, cargo, go test, rspec, maven/gradle, dotnet, flutter…) — voir Phase 6 du skill.
 
 ## Installation (locale, dev)
 
-Le plugin n'est pas encore publié. Pour l'installer en local :
+Le plugin n'est pas encore publié. Pour l'installer en local sur n'importe quel projet :
 
-```powershell
-# Clone (si pas déjà sur la machine)
-cd C:\workspace
-git clone https://github.com/<user>/issue-runner.git  # à créer
+```bash
+# Ajouter comme marketplace local Claude Code (une seule fois)
+claude /plugin marketplace add /chemin/vers/issue-runner
 
-# Ajouter comme marketplace local Claude Code
-claude /plugin marketplace add C:\workspace\issue-runner
+# Dans chaque projet où tu veux l'utiliser :
 claude /plugin install issue-runner
 ```
 
 ## État de construction
 
 - [x] Build-1 — Fondations (hook fast filter, intent-classifier agent, lib state/gh)
-- [ ] Build-2 — Agents core (optimizer, risk, implementer, test-writer)
-- [ ] Build-3 — Agents qualité (regression-checker, pr-reviewer, prompt-splitter)
-- [ ] Build-4 — Orchestration & parallélisme multi-feature
-- [ ] Build-5 — Validation sur GSPORTS
+- [x] Build-2 — Agents core (optimizer, risk, implementer, test-writer)
+- [x] Build-3 — Agents qualité (regression-checker, pr-reviewer, prompt-splitter)
+- [x] Build-4 — Orchestration & parallélisme multi-feature (doctrine dans SKILL.md, pas de code orchestrateur séparé)
+- [x] Build-6 — Portage cross-platform (PowerShell → Node.js) + config par projet + détection de stack généralisée pour Phase 6
+- [ ] Build-5 — Validation sur un projet réel
 
 ## Backend issues
 
