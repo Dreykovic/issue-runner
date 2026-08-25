@@ -1,5 +1,5 @@
 {
-  "description": "issue-runner — déclenche le pipeline si le prompt est un travail d'implémentation",
+  "description": "issue-runner — triggers the pipeline if the prompt is implementation work",
   "hooks": {
     "UserPromptSubmit": [
       {

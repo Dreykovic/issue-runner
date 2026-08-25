@@ -1,34 +1,34 @@
-# issue-runner — README technique
+# issue-runner — technical README
 
-> ℹ️ **Ce fichier est de la documentation, pas du code orchestrateur.**
-> La doctrine d'orchestration vit dans `skills/issue-runner-orchestration/SKILL.md` —
-> c'est ce skill qui est auto-découvert par Claude Code et qui contient les
-> instructions complètes du pipeline.
+> ℹ️ **This file is documentation, not orchestrator code.**
+> The orchestration doctrine lives in `skills/issue-runner-orchestration/SKILL.md` —
+> that's the skill Claude Code auto-discovers, and it contains the complete
+> pipeline instructions.
 
-## Pourquoi un skill et pas un CLAUDE.md plugin
+## Why a skill and not a plugin CLAUDE.md
 
-Claude Code ne charge automatiquement que :
-- Le `CLAUDE.md` du **projet** dans lequel tu travailles (cwd)
-- Les **skills** des plugins installés (auto-discovery dans `skills/<name>/SKILL.md`)
-- Les **commands** des plugins (auto-discovery dans `commands/<name>.md`)
-- Les **agents** des plugins (auto-discovery dans `agents/<name>.md`)
+Claude Code only auto-loads:
+- The **project**'s own `CLAUDE.md` (cwd)
+- Installed plugins' **skills** (auto-discovery under `skills/<name>/SKILL.md`)
+- Plugins' **commands** (auto-discovery under `commands/<name>.md`)
+- Plugins' **agents** (auto-discovery under `agents/<name>.md`)
 
-Un `CLAUDE.md` placé à la racine d'un plugin n'est PAS chargé. Pour avoir des
-instructions "always available" qui pilotent Claude main, il faut un Skill.
+A `CLAUDE.md` placed at a plugin's root is NOT loaded. To get "always available"
+instructions that drive Claude proper, you need a Skill.
 
-## Architecture du plugin
+## Plugin architecture
 
 ```
 issue-runner/
 ├── .claude-plugin/
-│   └── plugin.json                manifeste (name, description, author)
+│   └── plugin.json                manifest (name, description, author)
 ├── hooks/
-│   ├── hooks.json                 déclare le hook UserPromptSubmit
-│   └── user-prompt-submit.js      fast filter (<100ms, sans LLM, Node.js)
+│   ├── hooks.json                 declares the UserPromptSubmit hook
+│   └── user-prompt-submit.js      fast filter (<100ms, no LLM, Node.js)
 ├── skills/
 │   └── issue-runner-orchestration/
-│       └── SKILL.md               doctrine d'orchestration COMPLÈTE
-├── agents/                        8 agents .md, invocables via Agent tool
+│       └── SKILL.md               COMPLETE orchestration doctrine
+├── agents/                        8 agent .md files, invocable via the Agent tool
 │   ├── intent-classifier.md
 │   ├── prompt-optimizer.md
 │   ├── prompt-splitter.md
@@ -38,35 +38,35 @@ issue-runner/
 │   ├── test-writer.md
 │   └── pr-reviewer.md
 ├── commands/
-│   └── run.md                     slash /run (fallback manuel)
+│   └── run.md                     slash /run (manual fallback)
 ├── lib/
-│   ├── config.js                  lecture .claude/issue-runner.config.json (repo cible)
-│   ├── state.js                   gestion .claude/runner-state/ (CLI Node)
-│   └── gh-broker.js               wrapper gh CLI (CLI Node)
+│   ├── config.js                  reads .claude/issue-runner.config.json (target repo)
+│   ├── state.js                   manages .claude/runner-state/ (Node CLI)
+│   └── gh-broker.js               gh CLI wrapper (Node CLI)
 └── README.md
 ```
 
-Le plugin est écrit en Node.js pur (aucune dépendance npm) pour être installable tel quel sur n'importe quel projet, indépendamment de l'OS — seuls `node` et `gh` (authentifié) doivent être sur le PATH du repo cible.
+The plugin is written in pure Node.js (no npm dependency) so it's installable as-is on any project, regardless of OS — only `node` and `gh` (authenticated) need to be on the target repo's PATH.
 
-## Comment ça s'active
+## How it activates
 
-1. **L'utilisateur tape un prompt** → Claude Code transmet l'événement `UserPromptSubmit`.
-2. **Le hook `user-prompt-submit.js` tourne** (≤100 ms, fast filter sans LLM) :
-   - Soit il écarte (prompt trop court, slash command, question pure…) → `{continue: true}`
-   - Soit il injecte `<issue-runner-active>` en `systemMessage`
-3. **Claude main reçoit le `systemMessage`**. Le skill `issue-runner-orchestration` est dans
-   sa liste de skills disponibles ; il l'invoque via le tool Skill pour charger la doctrine.
-4. **Claude main suit la doctrine** : Phase A → B → 1 → … → 9, en spawnant les agents
-   du plugin et en appelant les libs Node.js (`lib/*.js`) via le tool Bash.
+1. **The user types a prompt** → Claude Code fires the `UserPromptSubmit` event.
+2. **The `user-prompt-submit.js` hook runs** (≤100 ms, no-LLM fast filter):
+   - Either it dismisses (prompt too short, slash command, pure question…) → `{continue: true}`
+   - Or it injects `<issue-runner-active>` as a `systemMessage`
+3. **Claude proper receives the `systemMessage`**. The `issue-runner-orchestration` skill is in
+   its list of available skills; it invokes it via the Skill tool to load the doctrine.
+4. **Claude proper follows the doctrine**: Phase A → B → 1 → … → 9, spawning the plugin's
+   agents and calling the Node.js libs (`lib/*.js`) via the Bash tool.
 
-## Voir aussi
+## See also
 
-- `skills/issue-runner-orchestration/SKILL.md` — pipeline complet, invocations, gates utilisateur
-- `agents/*.md` — chacun des 8 agents avec son rôle, son schéma I/O, ses anti-patterns
-- `hooks/user-prompt-submit.js` — logique du fast filter
-- `lib/*.js` — config, gestion d'état, wrapper gh CLI (CLI Node, JSON sur stdout)
+- `skills/issue-runner-orchestration/SKILL.md` — the full pipeline, invocations, user gates
+- `agents/*.md` — each of the 8 agents with its role, I/O schema, anti-patterns
+- `hooks/user-prompt-submit.js` — fast-filter logic
+- `lib/*.js` — config, state management, gh CLI wrapper (Node CLI, JSON on stdout)
 
-## Coût ordre de grandeur (v1)
+## Order-of-magnitude cost (v1)
 
-~$0.20–$0.50 par pipeline complet (Haiku pour les phases légères, Sonnet pour
-les phases lourdes). Les phases gates utilisateur ne coûtent rien (juste de l'attente).
+~$0.20–$0.50 per full pipeline run (Haiku for light phases, Sonnet for
+heavy phases). User-gate phases cost nothing (just waiting time).

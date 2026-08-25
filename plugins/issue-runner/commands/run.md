@@ -1,25 +1,25 @@
 ---
-description: Lance manuellement le pipeline issue-runner sur le prompt fourni. Sert de fallback quand le hook auto-déclencheur est désactivé, n'a pas détecté le besoin, ou quand l'utilisateur veut explicitement forcer le pipeline.
+description: Manually launches the issue-runner pipeline on the given prompt. Serves as a fallback when the auto-trigger hook is disabled, didn't detect the need, or when the user explicitly wants to force the pipeline.
 ---
 
-L'utilisateur t'invoque via `/run <description du travail>`. Tu déclenches manuellement le pipeline issue-runner.
+The user invokes you via `/run <description of the work>`. You manually trigger the issue-runner pipeline.
 
-## Procédure
+## Procedure
 
-1. **Récupère les arguments** : tout ce qui suit `/run` est le prompt utilisateur effectif. Si vide, demande à l'utilisateur "Sur quel travail veux-tu lancer le runner ?" et utilise sa réponse.
+1. **Grab the arguments**: everything after `/run` is the effective user prompt. If empty, ask the user "What work do you want to run the runner on?" and use their reply.
 
-2. **Simule le déclencheur du hook** : ajoute mentalement `<issue-runner-active>` au contexte, invoque le skill `issue-runner-orchestration` via le tool Skill, et **suis exactement** sa doctrine, en commençant par Phase A (intent-classifier).
+2. **Simulate the hook trigger**: mentally add `<issue-runner-active>` to the context, invoke the `issue-runner-orchestration` skill via the Skill tool, and **follow its doctrine exactly**, starting at Phase A (intent-classifier).
 
-3. **Différences avec le déclenchement automatique** :
-   - Tu peux **forcer la décision** de l'intent-classifier si l'utilisateur a précisé le type dans son `/run`. Exemples :
-     - `/run --new "ajoute le champ venue"` → force `decision: NEW_ISSUE`
-     - `/run --issue 42 "corrige le bug"` → force `decision: EXISTING_ISSUE_42`
-     - `/run --multi "ajoute X et corrige Y"` → force `decision: MULTI`
-   - Sans flag → laisse l'intent-classifier décider normalement.
+3. **Differences from automatic triggering**:
+   - You can **force the intent-classifier's decision** if the user specified the type in their `/run`. Examples:
+     - `/run --new "add the venue field"` → forces `decision: NEW_ISSUE`
+     - `/run --issue 42 "fix the bug"` → forces `decision: EXISTING_ISSUE_42`
+     - `/run --multi "add X and fix Y"` → forces `decision: MULTI`
+   - Without a flag → let the intent-classifier decide normally.
 
-4. **Notifie l'utilisateur** que le runner est lancé manuellement et passe en mode pipeline.
+4. **Notify the user** that the runner was launched manually and is now in pipeline mode.
 
 ## Notes
 
-- Le flag est optionnel ; sans flag, le comportement est identique à l'auto-déclenchement.
-- Si l'utilisateur appelle `/run` alors qu'un pipeline est déjà actif (voir `node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" list-active`), demande "Un pipeline est déjà en cours pour l'issue #N (phase: X). Veux-tu : (a) en lancer un autre en parallèle, (b) reprendre celui-ci, (c) annuler ?"
+- The flag is optional; without one, behavior is identical to automatic triggering.
+- If the user calls `/run` while a pipeline is already active (see `node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" list-active`), ask "A pipeline is already running for issue #N (phase: X). Do you want to: (a) start another one in parallel, (b) resume this one, (c) cancel?"

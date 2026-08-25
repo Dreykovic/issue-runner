@@ -6,65 +6,65 @@ version: 2.0.0
 
 # issue-runner — orchestration
 
-Tu es maintenant en mode orchestrateur `issue-runner`. Tu DOIS suivre cette doctrine **avant toute autre action sur le prompt utilisateur** dès que tu vois `<issue-runner-active>` dans un system message, ou quand l'utilisateur invoque `/run`.
+You are now in `issue-runner` orchestrator mode. You MUST follow this doctrine **before any other action on the user prompt** as soon as you see `<issue-runner-active>` in a system message, or when the user invokes `/run`.
 
-> ⚠️ Si tu N'AS PAS été activé (pas de marqueur, pas d'invocation /run), ignore complètement ce skill.
+> ⚠️ If you were NOT activated (no marker, no /run invocation), ignore this skill entirely.
 
-Ce plugin est **cross-platform** (Node.js, pas de dépendance OS) et **agnostique du stack** du projet cible. Il s'installe dans n'importe quel repo ; les seuls prérequis sont `node` et `gh` (authentifié) sur PATH.
+This plugin is **cross-platform** (Node.js, no OS dependency) and **stack-agnostic** for the target project. It installs into any repo; the only prerequisites are `node` and `gh` (authenticated) on PATH.
 
 ---
 
-## Vue d'ensemble du pipeline
+## Pipeline overview
 
 ```
-        prompt utilisateur
+        user prompt
                 │
-        [hook fast filter] (≤100 ms)
+        [fast-filter hook] (≤100 ms)
                 │
         <issue-runner-active>
                 │
                 ▼
    ┌──────────────────────────┐
-   │  Phase A : intent-classifier
+   │  Phase A: intent-classifier
    └──────────────────────────┘
                 │
-       CONVERSATION → réponse normale, STOP
-       UNCLEAR → demande à l'utilisateur, puis branche
-       MULTI → split (Phase B) puis N pipelines parallèles
-       NEW_ISSUE / EXISTING_ISSUE → pipeline séquentiel
+       CONVERSATION → normal response, STOP
+       UNCLEAR → asks the user, then branches
+       MULTI → split (Phase B) then N parallel pipelines
+       NEW_ISSUE / EXISTING_ISSUE → sequential pipeline
                 │
                 ▼
    ┌──────────────────────────┐
-   │  Phase B : prompt-splitter (si MULTI uniquement)
+   │  Phase B: prompt-splitter (MULTI only)
    └──────────────────────────┘
                 │
-                ▼  (pour chaque feature OU pour la feature unique)
+                ▼  (for each feature, or the single feature)
    ┌──────────────────────────┐
-   │  Phase 1 : prompt-optimizer
-   │  Phase 2 : risk-analyzer
-   │  Phase 3 : setup issue + branch + worktree
-   │  Phase 4 : implementer
-   │  Phase 5 : regression-checker
-   │  Phase 6 : test-writer + run tests
-   │  Phase 7 : create PR
-   │  Phase 8 : pr-reviewer
-   │  Phase 9 : merge (avec confirmation utilisateur)
+   │  Phase 1: prompt-optimizer
+   │  Phase 2: risk-analyzer
+   │  Phase 3: setup issue + branch + worktree
+   │  Phase 4: implementer
+   │  Phase 5: regression-checker
+   │  Phase 6: test-writer + run tests
+   │  Phase 7: create PR
+   │  Phase 8: pr-reviewer
+   │  Phase 9: merge (with user confirmation)
    └──────────────────────────┘
 ```
 
-Persiste l'état après chaque phase dans `.claude/runner-state/issue-<N>/state.json` du **repo cible** via `node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" <command> ...` (Bash tool). Tous les outputs de `state.js` et `gh-broker.js` sont du JSON sur stdout — parse-le pour brancher.
+Persist state after every phase in `.claude/runner-state/issue-<N>/state.json` in the **target repo**, via `node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" <command> ...` (Bash tool). Every output of `state.js` and `gh-broker.js` is JSON on stdout — parse it to branch.
 
 ---
 
-## Configuration par projet (optionnelle)
+## Per-project configuration (optional)
 
-Avant Phase A, si un fichier `.claude/issue-runner.config.json` existe dans le repo cible, charge-le :
+Before Phase A, if a `.claude/issue-runner.config.json` file exists in the target repo, load it:
 
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/lib/config.js"
 ```
 
-Champs supportés (tous optionnels, defaults entre parenthèses) :
+Supported fields (all optional, defaults in parentheses):
 
 ```json
 {
@@ -77,187 +77,187 @@ Champs supportés (tous optionnels, defaults entre parenthèses) :
 }
 ```
 
-- `baseBranch` : branche depuis laquelle créer les branches runner et cibler les PR.
-- `issueLabels` : labels appliqués aux issues créées par le runner.
-- `mergeStrategy` : `merge` | `squash` | `rebase`, utilisé par défaut en Phase 9.
-- `maxParallelFeatures` : cap sur le nombre de cycles MULTI en parallèle.
-- `maxRetriesPerPhase` : nombre de retries avant `failed`.
-- `testCommand` : si défini, **remplace** la détection automatique du stack en Phase 6 (utile pour un monorepo ou une commande non standard, ex. `"pnpm --filter api test"`).
+- `baseBranch`: branch to create runner branches from and target PRs at.
+- `issueLabels`: labels applied to issues created by the runner.
+- `mergeStrategy`: `merge` | `squash` | `rebase`, used by default in Phase 9.
+- `maxParallelFeatures`: cap on the number of parallel MULTI cycles.
+- `maxRetriesPerPhase`: number of retries before `failed`.
+- `testCommand`: if set, **overrides** the automatic stack detection in Phase 6 (useful for a monorepo or a non-standard command, e.g. `"pnpm --filter api test"`).
 
-Si le fichier n'existe pas ou est invalide, les defaults ci-dessus s'appliquent silencieusement — le plugin fonctionne sans aucune config.
+If the file doesn't exist or is invalid, the defaults above apply silently — the plugin works with zero config.
 
 ---
 
 ## Phase A — intent-classifier
 
-**Quand** : immédiatement après avoir vu `<issue-runner-active>`.
+**When**: immediately after seeing `<issue-runner-active>`.
 
-**Comment l'invoquer** :
+**How to invoke it**:
 ```
 Agent(
   subagent_type: "general-purpose",
   description: "Classify user intent for issue-runner",
   prompt: """
-Tu es l'agent `intent-classifier` du plugin issue-runner. Suis strictement les
-instructions de ${CLAUDE_PLUGIN_ROOT}/agents/intent-classifier.md.
+You are the `intent-classifier` agent of the issue-runner plugin. Strictly follow
+the instructions in ${CLAUDE_PLUGIN_ROOT}/agents/intent-classifier.md.
 
-PROMPT UTILISATEUR À CLASSIFIER :
+USER PROMPT TO CLASSIFY:
 \"\"\"
-<le prompt utilisateur original, verbatim>
+<the original user prompt, verbatim>
 \"\"\"
 
-Lis MEMORY.md (chemin auto-memory), CLAUDE.md du repo courant (si présent),
-puis exécute `gh issue list --state open --limit 30 --json number,title,labels,body`.
+Read MEMORY.md (auto-memory path), the current repo's CLAUDE.md (if present),
+then run `gh issue list --state open --limit 30 --json number,title,labels,body`.
 
-Liste également les états runner actifs avec :
+Also list active runner states with:
   node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" list-active
-pour détecter les issues en cours.
+to detect work already in progress.
 
-Produis EXCLUSIVEMENT le bloc JSON conforme au schéma défini dans ton agent .md.
+Produce ONLY the JSON block matching the schema defined in your agent .md.
 """
 )
 ```
 
-**Output** : JSON `{decision, matched_issue, features, reasoning, confidence}`.
+**Output**: JSON `{decision, matched_issue, features, reasoning, confidence}`.
 
-**Branchement immédiat** :
-- `CONVERSATION` → ignore le runner, traite le prompt normalement. STOP.
-- `UNCLEAR` → `AskUserQuestion` : "Le runner hésite : s'agit-il d'une nouvelle issue à gérer ?" avec options {Oui nouvelle, Oui issue #N existante, Non discussion}. Selon réponse, force la décision.
-- `MULTI` → passe à Phase B.
-- `NEW_ISSUE` → passe à Phase 1 avec un seul cycle.
-- `EXISTING_ISSUE_<N>` → passe à Phase 3-bis (resume), voir plus bas.
+**Immediate branching**:
+- `CONVERSATION` → ignore the runner, handle the prompt normally. STOP.
+- `UNCLEAR` → `AskUserQuestion`: "The runner is unsure: is this a new issue to handle?" with options {Yes, new one, Yes, existing issue #N, No, just discussion}. Force the decision based on the answer.
+- `MULTI` → go to Phase B.
+- `NEW_ISSUE` → go to Phase 1 with a single cycle.
+- `EXISTING_ISSUE_<N>` → go to Phase 3-bis (resume), see below.
 
 ---
 
-## Phase B — prompt-splitter (si MULTI)
+## Phase B — prompt-splitter (if MULTI)
 
-**Comment l'invoquer** :
+**How to invoke it**:
 ```
 Agent(
   subagent_type: "general-purpose",
   description: "Split multi-feature prompt",
   prompt: """
-Tu es l'agent `prompt-splitter` (cf. ${CLAUDE_PLUGIN_ROOT}/agents/prompt-splitter.md).
+You are the `prompt-splitter` agent (see ${CLAUDE_PLUGIN_ROOT}/agents/prompt-splitter.md).
 
-PROMPT UTILISATEUR :
+USER PROMPT:
 \"\"\"
-<le prompt original>
+<the original prompt>
 \"\"\"
 
-DÉCISION INTENT-CLASSIFIER :
-<JSON intent-classifier collé ici>
+INTENT-CLASSIFIER DECISION:
+<intent-classifier JSON pasted here>
 
-Produis le JSON conforme à ton schéma.
+Produce the JSON matching your schema.
 """
 )
 ```
 
-**Si** `is_multi_feature: false` (le splitter a changé d'avis) → traite comme NEW_ISSUE unique.
+**If** `is_multi_feature: false` (the splitter changed its mind) → treat as a single NEW_ISSUE.
 
-**Sinon** : pour chaque entrée de `features[]`, lance un cycle complet Phases 1→9 **en parallèle** (un tool Agent call par feature en parallèle) si `split_strategy: parallel`. Si `sequential`, en série en respectant `depends_on`.
+**Otherwise**: for each entry in `features[]`, launch a full Phases 1→9 cycle **in parallel** (one Agent tool call per feature, in parallel) if `split_strategy: parallel`. If `sequential`, run in series respecting `depends_on`.
 
-> ⚠️ Limite au `maxParallelFeatures` de la config (3 par défaut) le nombre de cycles parallèles simultanés pour éviter de saturer le contexte. Si N > la limite, batche par groupes.
+> ⚠️ Cap the number of simultaneous parallel cycles at the config's `maxParallelFeatures` (3 by default) to avoid saturating context. If N exceeds the cap, batch in groups.
 
 ---
 
 ## Phase 1 — prompt-optimizer
 
-**Invocation** :
+**Invocation**:
 ```
 Agent(
   subagent_type: "general-purpose",
   description: "Optimize prompt into spec",
   prompt: """
-Tu es l'agent `prompt-optimizer` (cf. ${CLAUDE_PLUGIN_ROOT}/agents/prompt-optimizer.md).
+You are the `prompt-optimizer` agent (see ${CLAUDE_PLUGIN_ROOT}/agents/prompt-optimizer.md).
 
-PROMPT (brut ou prompt_subset si MULTI) :
+PROMPT (raw, or prompt_subset if MULTI):
 \"\"\"
 <...>
 \"\"\"
 
-Produis le JSON spec conforme à ton schéma.
+Produce the JSON spec matching your schema.
 """
 )
 ```
 
-**Persistance** :
+**Persistence**:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key spec --value '<spec_json>'
 node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" update-phase --issue <N> --phase optimize --agent prompt-optimizer --result ok
 ```
 
-**Gate utilisateur** : si la spec a des `open_questions[]` non-vides ET `estimated_complexity` ≥ `medium`, **demande à l'utilisateur** de répondre aux questions avant Phase 2.
+**User gate**: if the spec has non-empty `open_questions[]` AND `estimated_complexity` ≥ `medium`, **ask the user** to answer the questions before Phase 2.
 
 ---
 
 ## Phase 2 — risk-analyzer
 
-**Invocation** : même pattern, passer `spec` du Phase 1 en input.
+**Invocation**: same pattern, pass Phase 1's `spec` as input.
 
-**Persistance** :
+**Persistence**:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key risk_analysis --value '<risk_json>'
 ```
 
-**Gate utilisateur** : si `needs_user_confirmation: true` dans le rapport → `AskUserQuestion` montrant `overall_risk_level`, `confirmation_reason` et la liste des risques `high+`. Options : {Continue, Modifier la spec, Abandon}.
+**User gate**: if `needs_user_confirmation: true` in the report → `AskUserQuestion` showing `overall_risk_level`, `confirmation_reason`, and the list of `high+` risks. Options: {Continue, Revise the spec, Abort}.
 
 ---
 
 ## Phase 3 — setup (issue + branch + worktree)
 
-**Si NEW_ISSUE** :
+**If NEW_ISSUE**:
 ```bash
 slug=$(node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" slug --title "<spec.objective>" | jq -r .slug)
-issue=$(node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" create-issue --title "<spec.objective>" --body "<résumé spec + risks>")
+issue=$(node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" create-issue --title "<spec.objective>" --body "<spec + risks summary>")
 issueNumber=$(echo "$issue" | jq -r .number)
 branch=$(node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" create-branch --issue "$issueNumber" --slug "$slug" | jq -r .branch)
 node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" init --issue "$issueNumber" --title "<spec.objective>" --branch "$branch"
 ```
 
-(Si `jq` n'est pas disponible sur la machine, parse le JSON toi-même à partir du stdout de la commande — c'est toujours un objet JSON unique.)
+(If `jq` isn't available on the machine, parse the JSON yourself from the command's stdout — it's always a single JSON object.)
 
-**Si EXISTING_ISSUE_<N>** :
+**If EXISTING_ISSUE_<N>**:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" get-issue --number <N>
-# Si une branche runner/issue-<N>-* existe déjà (git branch --list) → checkout dessus
-# Sinon → node lib/gh-broker.js create-branch --issue <N> --slug <slug> (depuis base branch)
+# If a runner/issue-<N>-* branch already exists (git branch --list) → check it out
+# Otherwise → node lib/gh-broker.js create-branch --issue <N> --slug <slug> (from base branch)
 ```
 
-**Création du worktree** : utilise `Agent(isolation: worktree)` plus tard en Phase 4. Le worktree créé par l'Agent est éphémère et lié à un agent particulier.
+**Worktree creation**: use `Agent(isolation: worktree)` later, in Phase 4. The worktree created by the Agent is ephemeral and tied to one particular agent run.
 
 ---
 
 ## Phase 4 — implementer
 
-**Invocation** :
+**Invocation**:
 ```
 Agent(
   subagent_type: "general-purpose",
   isolation: "worktree",
   description: "Implement feature #<N>",
   prompt: """
-Tu es l'agent `implementer` (cf. ${CLAUDE_PLUGIN_ROOT}/agents/implementer.md).
+You are the `implementer` agent (see ${CLAUDE_PLUGIN_ROOT}/agents/implementer.md).
 
-ISSUE : #<N> — <title>
-BRANCH : <runner/issue-N-slug>
+ISSUE: #<N> — <title>
+BRANCH: <runner/issue-N-slug>
 
-SPEC (prompt-optimizer) :
+SPEC (prompt-optimizer):
 <JSON>
 
-ANALYSE DE RISQUE (risk-analyzer) :
+RISK ANALYSIS (risk-analyzer):
 <JSON>
 
-Implémente le travail. Respecte les mitigations. Ne commit pas. Produis le rapport
-JSON conforme à ton schéma.
+Implement the work. Respect the mitigations. Do not commit. Produce the report
+JSON matching your schema.
 """
 )
 ```
 
-**Récupération du diff** : à la fin du worktree, capturer `git diff <baseBranch>...HEAD` du worktree et le stocker en artifact `diff`.
+**Diff retrieval**: at the end of the worktree run, capture `git diff <baseBranch>...HEAD` from the worktree and store it as the `diff` artifact.
 
-**Retry** : si le rapport est `status: failed`, relance jusqu'à `maxRetriesPerPhase` fois (2 par défaut) avec les `blockers` injectés dans le prompt. Au-delà → état `failed`, escalate à l'utilisateur.
+**Retry**: if the report is `status: failed`, retry up to `maxRetriesPerPhase` times (2 by default) with the `blockers` injected into the prompt. Beyond that → `failed` state, escalate to the user.
 
-**Persistance** :
+**Persistence**:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key implementer_report --value '<json>'
 node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key diff --value "$(git diff <base>...HEAD)"
@@ -267,76 +267,76 @@ node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key diff --
 
 ## Phase 5 — regression-checker
 
-**Invocation** : passer spec + risk + implementer_report + diff en input. Pas de worktree (lecture seule).
+**Invocation**: pass spec + risk + implementer_report + diff as input. No worktree (read-only).
 
-**Branchement sur verdict** :
+**Branch on verdict**:
 - `pass` → Phase 6
-- `concerns` → `AskUserQuestion` à l'utilisateur avec la liste des findings major. Si valide → Phase 6. Sinon → retour Phase 4 avec findings injectés.
-- `block` → retour Phase 4 obligatoire avec les findings `blocker`. Compteur retry = +1.
+- `concerns` → `AskUserQuestion` to the user with the list of major findings. If confirmed → Phase 6. Otherwise → back to Phase 4 with the findings injected.
+- `block` → mandatory return to Phase 4 with the `blocker` findings. Retry counter +1.
 
 ---
 
-## Phase 6 — test-writer + exécution
+## Phase 6 — test-writer + execution
 
-**Invocation `test-writer`** : passer spec + implementer_report + regression_check_report.
+**`test-writer` invocation**: pass spec + implementer_report + regression_check_report.
 
-L'agent écrit les tests **dans le worktree** (réutilise le worktree de Phase 4 via `Agent(isolation: worktree)` avec le même chemin si possible).
+The agent writes tests **inside the worktree** (reuses the Phase 4 worktree via `Agent(isolation: worktree)` at the same path if possible).
 
-**Détermination de la commande de test** :
+**Determining the test command**:
 
-1. Si `testCommand` est défini dans `.claude/issue-runner.config.json` → utilise-le tel quel.
-2. Sinon, détecte le stack en inspectant les fichiers à la racine du repo cible (worktree), dans cet ordre :
+1. If `testCommand` is set in `.claude/issue-runner.config.json` → use it as-is.
+2. Otherwise, detect the stack by inspecting files at the root of the target repo (worktree), in this order:
 
-| Fichiers présents | Commande |
+| Files present | Command |
 |---|---|
 | `pnpm-lock.yaml` | `pnpm test` |
 | `yarn.lock` | `yarn test` |
 | `bun.lockb` / `bun.lock` | `bun test` |
-| `package-lock.json` ou `package.json` (fallback) | `npm test` |
+| `package-lock.json` or `package.json` (fallback) | `npm test` |
 | `pubspec.yaml` | `flutter test` |
 | `Cargo.toml` | `cargo test` |
 | `go.mod` | `go test ./...` |
-| `pytest.ini` / `pyproject.toml` avec `[tool.pytest...]` / `setup.cfg` avec `pytest` | `pytest` |
-| `requirements.txt` sans config pytest explicite | `python -m pytest` (best-effort) |
-| `Gemfile` avec `rspec` en dépendance | `bundle exec rspec` |
+| `pytest.ini` / `pyproject.toml` with `[tool.pytest...]` / `setup.cfg` with `pytest` | `pytest` |
+| `requirements.txt` without explicit pytest config | `python -m pytest` (best-effort) |
+| `Gemfile` with `rspec` as a dependency | `bundle exec rspec` |
 | `pom.xml` | `mvn test` |
 | `build.gradle` / `build.gradle.kts` | `./gradlew test` |
 | `*.csproj` / `*.sln` | `dotnet test` |
 
-3. Si aucun pattern ne matche, ou en cas de doute (plusieurs lockfiles au même niveau, monorepo), **demande à l'utilisateur** quelle commande utiliser plutôt que de deviner, et propose de la sauvegarder dans `testCommand` pour les prochaines fois.
+3. If no pattern matches, or in case of ambiguity (several lockfiles at the same level, monorepo), **ask the user** which command to use rather than guessing, and offer to save it to `testCommand` for next time.
 
-**Exécution** : l'orchestrateur lance la commande choisie lui-même (Bash tool, dans le worktree), pas l'agent.
+**Execution**: the orchestrator runs the chosen command itself (Bash tool, inside the worktree), not the agent.
 
-**Si rouge** : retour Phase 4 avec les failed_tests injectés. Compteur retry +1, jusqu'à `maxRetriesPerPhase` → état `failed`.
+**If red**: back to Phase 4 with the failed_tests injected. Retry counter +1, up to `maxRetriesPerPhase` → `failed` state.
 
 ---
 
 ## Phase 7 — PR creation
 
-**Invocation** :
+**Invocation**:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" create-pr \
   --issue <N> \
   --title "<spec.objective>" \
-  --body "## Résumé
-<diff_summary de l'implementer>
+  --body "## Summary
+<implementer's diff_summary>
 
-## Changements
-<files_modified de l'implementer>
+## Changes
+<implementer's files_modified>
 
 ## Tests
-<coverage_summary de test-writer>
+<test-writer's coverage_summary>
 
-## Risques connus
-<risks de risk-analyzer en synthèse>
+## Known risks
+<risk-analyzer's risks, summarized>
 
-## Décisions notables
-<decisions + deviations_from_spec de l'implementer>"
+## Notable decisions
+<implementer's decisions + deviations_from_spec>"
 ```
 
-**Avant de créer la PR** : commiter le diff du worktree depuis le worktree (utilisateur n'a PAS encore validé — c'est ok, c'est sur une branche dédiée non-mergée). Commit message conventional : `feat:`/`fix:`/`refactor:` selon le scope.
+**Before creating the PR**: commit the worktree's diff from the worktree (the user hasn't validated yet — that's fine, it's on a dedicated, unmerged branch). Conventional commit message: `feat:`/`fix:`/`refactor:` depending on scope.
 
-**Persistance** :
+**Persistence**:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key pr_url --value "<url>"
 ```
@@ -345,16 +345,16 @@ node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" set-artifact --issue <N> --key pr_url 
 
 ## Phase 8 — pr-reviewer
 
-**Invocation** : passer tous les artifacts amont + numéro de PR.
+**Invocation**: pass all upstream artifacts + the PR number.
 
-**Branchement sur verdict** :
+**Branch on verdict**:
 - `approve` → Phase 9
-- `comment_only` → poster les commentaires inline, passer Phase 9
-- `request_changes` → retour Phase 4 avec les blockers. Compteur retry +1.
+- `comment_only` → post the inline comments, proceed to Phase 9
+- `request_changes` → back to Phase 4 with the blockers. Retry counter +1.
 
-**Poster les commentaires inline** :
+**Posting inline comments**:
 ```bash
-# Pour chaque inline_comment :
+# For each inline_comment:
 gh api repos/:owner/:repo/pulls/<N>/comments \
   -f path="<path>" -F line=<line> -f body="<body>" -f commit_id="<HEAD sha>"
 ```
@@ -363,54 +363,54 @@ gh api repos/:owner/:repo/pulls/<N>/comments \
 
 ## Phase 9 — merge
 
-**Toujours** demander confirmation utilisateur via `AskUserQuestion` :
-> "PR #<N> approuvée par le runner. Verdict : <résumé pr-reviewer>. Merger maintenant en `<mergeStrategy>` ?"
-> Options : {Merger maintenant, Voir le diff d'abord, Pas maintenant}.
+**Always** ask for user confirmation via `AskUserQuestion`:
+> "PR #<N> approved by the runner. Verdict: <pr-reviewer summary>. Merge now using `<mergeStrategy>`?"
+> Options: {Merge now, View the diff first, Not now}.
 
-Si "Voir le diff" → afficher `gh pr diff <N>` + reposer la question.
-Si "Pas maintenant" → état `done_unmerged`, l'utilisateur mergera à la main.
+If "View the diff" → show `gh pr diff <N>` + ask the question again.
+If "Not now" → `done_unmerged` state, the user will merge by hand.
 
-Si "Merger maintenant" :
+If "Merge now":
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/lib/gh-broker.js" merge-pr --number <N> --strategy <mergeStrategy>
 ```
 
-**Persistance finale** :
+**Final persistence**:
 ```bash
 node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" update-phase --issue <N> --phase done --agent orchestrator --result merged
 ```
-La branche est supprimée automatiquement par `gh pr merge --delete-branch`.
+The branch is deleted automatically by `gh pr merge --delete-branch`.
 
 ---
 
-## Reprise (resume) — EXISTING_ISSUE_<N>
+## Resume — EXISTING_ISSUE_<N>
 
-Quand intent-classifier décide `EXISTING_ISSUE_<N>` :
-1. `node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" get --issue <N>` pour récupérer l'état persisté
-2. Si état trouvé → reprendre à `state.phase + 1`. Récupérer les artifacts du state.json pour ne PAS rerun les phases déjà faites.
-3. Si pas d'état (issue créée hors du runner) → traiter comme NEW_ISSUE mais sans recréer l'issue ni la branche (réutiliser celles existantes).
+When intent-classifier decides `EXISTING_ISSUE_<N>`:
+1. `node "${CLAUDE_PLUGIN_ROOT}/lib/state.js" get --issue <N>` to retrieve the persisted state
+2. If a state is found → resume at `state.phase + 1`. Retrieve the artifacts from state.json so you do NOT rerun phases already done.
+3. If no state exists (issue created outside the runner) → treat as NEW_ISSUE but without recreating the issue or the branch (reuse the existing ones).
 
 ---
 
-## Règles d'or de l'orchestrateur
+## Orchestrator golden rules
 
-1. **Une seule phase active à la fois** par pipeline. Sauf en MULTI où c'est N pipelines en parallèle (cap `maxParallelFeatures`).
-2. **Aucun commit/merge automatique** sans validation utilisateur explicite en v1.
-3. **Retry maximum `maxRetriesPerPhase`** (2 par défaut) par phase. Au-delà → état `failed`, remonter à l'utilisateur avec le contexte complet.
-4. **Si l'utilisateur interrompt** avec un nouveau prompt (intent-classifier sur le nouveau prompt déclenche), sauvegarder l'état courant (`update-phase --phase paused`) avant de basculer.
-5. **Toujours notifier l'utilisateur** en 1 ligne à chaque transition de phase. Ex: "Phase 4 : implementer démarré dans worktree…"
-6. **Coût** : ~$0.20-$0.50 par pipeline complet (Haiku pour intent/optim/split, Sonnet pour le reste). À surveiller.
-7. **Timeout par phase** : 5 min Haiku, 15 min Sonnet, 30 min implementer (worktree). Au-delà → kill + retry.
-8. **Ne jamais deviner un prérequis manquant** : si `gh` n'est pas authentifié (`node lib/gh-broker.js check` → `ghAvailable: false`) ou si `node` n'est pas sur PATH côté hook (peu probable puisque tu es toi-même Claude Code, mais vérifie si les commandes lib/*.js échouent), arrête-toi et informe l'utilisateur au lieu de tenter un contournement.
+1. **Only one active phase at a time** per pipeline. Except in MULTI, where it's N pipelines in parallel (capped at `maxParallelFeatures`).
+2. **No automatic commit/merge** without explicit user confirmation in v1.
+3. **Retry cap of `maxRetriesPerPhase`** (2 by default) per phase. Beyond that → `failed` state, escalate to the user with full context.
+4. **If the user interrupts** with a new prompt (intent-classifier fires on the new prompt), save the current state (`update-phase --phase paused`) before switching over.
+5. **Always notify the user** with a 1-line update at every phase transition. E.g.: "Phase 4: implementer started in worktree…"
+6. **Cost**: ~$0.20-$0.50 per full pipeline (Haiku for intent/optimize/split, Sonnet for the rest). Keep an eye on it.
+7. **Timeout per phase**: 5 min Haiku, 15 min Sonnet, 30 min implementer (worktree). Beyond that → kill + retry.
+8. **Never guess a missing prerequisite**: if `gh` isn't authenticated (`node lib/gh-broker.js check` → `ghAvailable: false`) or if `node` isn't on PATH on the hook side (unlikely since you're Claude Code yourself, but check if `lib/*.js` commands fail), stop and inform the user instead of attempting a workaround.
 
-## Anti-patterns à éviter
+## Anti-patterns to avoid
 
-- ❌ Lancer Phase 1 sans avoir vu `<issue-runner-active>` (= violer le contrat hook)
-- ❌ Skipper une phase parce qu'elle "semble facile" — chaque phase a son rôle
-- ❌ Commiter ou push depuis Claude main (uniquement depuis le worktree de l'implementer)
-- ❌ Mergez sans confirmation utilisateur
-- ❌ Boucler indéfiniment sur retry — respecter `maxRetriesPerPhase`
-- ❌ Ignorer `needs_user_confirmation: true` du risk-analyzer
-- ❌ Mélanger les pipelines en MULTI (chaque feature a SON état, SA branche, SA PR)
-- ❌ Oublier de persister l'état entre phases — interdit de continuer si la phase précédente n'est pas marquée complete dans state.json
-- ❌ Deviner la commande de test sans consulter `testCommand` de la config ni détecter le stack — et sans demander en cas d'ambiguïté
+- ❌ Launching Phase 1 without having seen `<issue-runner-active>` (= violating the hook contract)
+- ❌ Skipping a phase because it "seems easy" — every phase has its role
+- ❌ Committing or pushing from Claude proper (only from the implementer's worktree)
+- ❌ Merging without user confirmation
+- ❌ Looping indefinitely on retry — respect `maxRetriesPerPhase`
+- ❌ Ignoring `needs_user_confirmation: true` from risk-analyzer
+- ❌ Mixing up pipelines in MULTI (each feature has ITS OWN state, branch, PR)
+- ❌ Forgetting to persist state between phases — continuing is forbidden if the previous phase isn't marked complete in state.json
+- ❌ Guessing the test command without consulting the config's `testCommand` or detecting the stack — and without asking in case of ambiguity

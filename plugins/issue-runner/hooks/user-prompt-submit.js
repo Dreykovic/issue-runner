@@ -85,17 +85,17 @@ function main() {
     // ── Not filtered out → ask Claude to invoke the classifier ──────────
 
     const msg = `<issue-runner-active>
-Le plugin issue-runner s'est déclenché sur ce prompt parce qu'il n'a pas été
-écarté par les fast filters (longueur >= 20, pas de slash command, pas une
-question pure, pas un mot de transition).
+The issue-runner plugin triggered on this prompt because it wasn't dismissed
+by the fast filters (length >= 20, not a slash command, not a pure question,
+not a transition word).
 
-AVANT TOUTE AUTRE ACTION sur ce prompt, invoque le skill
-\`issue-runner-orchestration\` via le tool Skill. Ce skill contient la doctrine
-complète d'orchestration (Phase A -> Phase 9). Suis-la strictement.
+BEFORE ANY OTHER ACTION on this prompt, invoke the
+\`issue-runner-orchestration\` skill via the Skill tool. That skill contains
+the complete orchestration doctrine (Phase A -> Phase 9). Follow it strictly.
 
-Si pour une raison technique le skill n'est pas disponible, repli sur :
-  - Tool Agent avec \`\${CLAUDE_PLUGIN_ROOT}/agents/intent-classifier.md\`
-  - Brancher selon la decision JSON retournee.
+If for some technical reason the skill isn't available, fall back to:
+  - The Agent tool with \`\${CLAUDE_PLUGIN_ROOT}/agents/intent-classifier.md\`
+  - Branch based on the returned JSON decision.
 </issue-runner-active>`;
 
     writeOutput({ continue: true, systemMessage: msg });

@@ -2,45 +2,45 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Pipeline Claude Code auto-déclenché qui industrialise le workflow de développement : à chaque prompt non-trivial, une suite d'agents spécialisés analyse, optimise, implémente, teste, ouvre une PR et review — sans intervention manuelle.
+Auto-triggered Claude Code pipeline that industrializes the development workflow: on every non-trivial prompt, a suite of specialized agents analyzes, optimizes, implements, tests, opens a PR, and reviews it — with no manual intervention.
 
 ## Vision
 
-> *"Pour chaque prompt, si une issue existe déjà pour le travail à faire, le runner attaque l'issue, crée la branche dédiée, et à la fin crée une pull request et fait la review avant de merger. Entre temps, avant même qu'il ne commence, un agent optimise mon prompt, un autre analyse les risques de régression possibles, après implémentation un agent check s'il n'y a pas de régressions, un agent écrit les tests unitaires, un autre les exécute, puis si tout va bien on passe au PR."*
+> *"For every prompt, if an issue already exists for the work to do, the runner picks up the issue, creates the dedicated branch, and at the end opens a pull request and reviews it before merging. In between, before it even starts, one agent optimizes my prompt, another analyzes possible regression risks, after implementation an agent checks for regressions, an agent writes unit tests, another runs them, and if everything's green we move on to the PR."*
 
 ## Pipeline
 
 ```
-Prompt utilisateur
+User prompt
    │
    ▼
-[Fast filter, hook Node.js, <100ms]
-   ├── skip → réponse normale Claude
-   └── candidat
+[Fast filter, Node.js hook, <100ms]
+   ├── skip → normal Claude response
+   └── candidate
        │
        ▼
-[intent-classifier — agent LLM Haiku, ~1-2s]
+[intent-classifier — Haiku LLM agent, ~1-2s]
    │
-   ├── CONVERSATION    → réponse normale
-   ├── NEW_ISSUE       → pipeline complet
-   ├── EXISTING_ISSUE_N → pipeline branché sur #N
-   ├── MULTI           → N pipelines parallèles
-   └── UNCLEAR         → demande à l'utilisateur
+   ├── CONVERSATION    → normal response
+   ├── NEW_ISSUE       → full pipeline
+   ├── EXISTING_ISSUE_N → pipeline resumed on #N
+   ├── MULTI           → N parallel pipelines
+   └── UNCLEAR         → asks the user
        │
-       ▼ (pour les cas pipeline)
-[prompt-optimizer] → reformule le prompt
+       ▼ (for pipeline cases)
+[prompt-optimizer] → reformulates the prompt
        │
        ▼
-[risk-analyzer] → analyse régression amont
+[risk-analyzer] → upfront regression analysis
        │
        ▼
 [issue-broker] → create/find issue + branch
        │
        ▼
-[implementer] (worktree, peut spawn sous-implementers pour multi-feature)
+[implementer] (worktree, can spawn sub-implementers for multi-feature work)
        │
        ▼
-[regression-checker] → relit le diff
+[regression-checker] → re-reads the diff
        │
        ▼
 [test-writer] → unit tests
@@ -49,23 +49,23 @@ Prompt utilisateur
 [test runner] → pnpm test / flutter test / etc.
        │
        ▼
-[pr-reviewer] → review de la PR
+[pr-reviewer] → reviews the PR
        │
        ▼
-[merge si vert]
+[merge if green]
 ```
 
-## Structure du plugin
+## Plugin structure
 
 ```
 issue-runner/
 ├── .claude-plugin/
-│   └── plugin.json              manifeste
+│   └── plugin.json              manifest
 ├── hooks/
-│   ├── hooks.json               déclare UserPromptSubmit
-│   └── user-prompt-submit.js    fast filter (sans LLM, <100ms)
+│   ├── hooks.json               declares UserPromptSubmit
+│   └── user-prompt-submit.js    fast filter (no LLM, <100ms)
 ├── agents/
-│   ├── intent-classifier.md     décide run/skip/ask
+│   ├── intent-classifier.md     decides run/skip/ask
 │   ├── prompt-optimizer.md      (Build-2)
 │   ├── risk-analyzer.md         (Build-2)
 │   ├── implementer.md           (Build-2)
@@ -74,22 +74,22 @@ issue-runner/
 │   ├── pr-reviewer.md           (Build-3)
 │   └── prompt-splitter.md       (Build-3)
 ├── commands/
-│   └── run.md                   slash command de secours
+│   └── run.md                   manual fallback slash command
 ├── skills/
-│   └── issue-runner-orchestration/SKILL.md   doctrine d'orchestration complète
+│   └── issue-runner-orchestration/SKILL.md   complete orchestration doctrine
 └── lib/
-    ├── config.js                lecture de .claude/issue-runner.config.json
-    ├── state.js                 gestion de .claude/runner-state/
-    └── gh-broker.js             wrapper gh CLI
+    ├── config.js                reads .claude/issue-runner.config.json
+    ├── state.js                 manages .claude/runner-state/
+    └── gh-broker.js             gh CLI wrapper
 ```
 
 ## Cross-platform
 
-Le plugin est écrit en **Node.js pur** (aucune dépendance npm), pas en PowerShell : il tourne à l'identique sur Linux, macOS et Windows dès que `node` et `gh` (authentifié) sont sur le PATH. C'est ce qui le rend installable sur n'importe lequel de tes projets, quel que soit l'OS de la machine.
+The plugin is written in **pure Node.js** (no npm dependency), not PowerShell: it runs identically on Linux, macOS, and Windows as soon as `node` and `gh` (authenticated) are on PATH. That's what makes it installable on any of your projects, regardless of the machine's OS.
 
-## Configuration par projet
+## Per-project configuration
 
-Optionnel : dépose un `.claude/issue-runner.config.json` à la racine du repo cible pour ajuster le comportement sans toucher au plugin :
+Optional: drop a `.claude/issue-runner.config.json` at the root of the target repo to adjust behavior without touching the plugin:
 
 ```json
 {
@@ -102,53 +102,52 @@ Optionnel : dépose un `.claude/issue-runner.config.json` à la racine du repo c
 }
 ```
 
-`testCommand` permet de forcer la commande de test (utile en monorepo) au lieu de laisser l'orchestrateur détecter le stack (npm/pnpm/yarn/bun, pytest, cargo, go test, rspec, maven/gradle, dotnet, flutter…) — voir Phase 6 du skill.
+`testCommand` lets you force the test command (useful in a monorepo) instead of letting the orchestrator auto-detect the stack (npm/pnpm/yarn/bun, pytest, cargo, go test, rspec, maven/gradle, dotnet, flutter…) — see Phase 6 of the skill.
 
 ## Installation
 
 ```bash
-# Enregistrer la marketplace (une seule fois, global)
+# Register the marketplace (once, globally)
 claude plugin marketplace add https://github.com/Dreykovic/issue-runner.git
 
-# Installer le plugin en scope user pour qu'il soit actif dans tous tes projets
+# Install the plugin in user scope so it's active across all your projects
 claude plugin install issue-runner@issue-runner --scope user
 ```
 
-Pour développer sur le plugin en local, remplace l'URL par le chemin de ton clone :
+To develop on the plugin locally, replace the URL with your clone's path:
 
 ```bash
-claude plugin marketplace add /chemin/vers/ton/clone/issue-runner
+claude plugin marketplace add /path/to/your/clone/issue-runner
 claude plugin install issue-runner@issue-runner
 ```
 
-## État de construction
+## Build status
 
-- [x] Build-1 — Fondations (hook fast filter, intent-classifier agent, lib state/gh)
-- [x] Build-2 — Agents core (optimizer, risk, implementer, test-writer)
-- [x] Build-3 — Agents qualité (regression-checker, pr-reviewer, prompt-splitter)
-- [x] Build-4 — Orchestration & parallélisme multi-feature (doctrine dans SKILL.md, pas de code orchestrateur séparé)
-- [x] Build-6 — Portage cross-platform (PowerShell → Node.js) + config par projet + détection de stack généralisée pour Phase 6
-- [ ] Build-5 — Validation sur un projet réel
+- [x] Build-1 — Foundations (fast-filter hook, intent-classifier agent, state/gh libs)
+- [x] Build-2 — Core agents (optimizer, risk, implementer, test-writer)
+- [x] Build-3 — Quality agents (regression-checker, pr-reviewer, prompt-splitter)
+- [x] Build-4 — Orchestration & multi-feature parallelism (doctrine lives in SKILL.md, no separate orchestrator code)
+- [x] Build-6 — Cross-platform port (PowerShell → Node.js) + per-project config + generalized stack detection for Phase 6
+- [ ] Build-5 — Validation on a real project
 
-## Backend issues
+## Issue backend
 
-GitHub seul pour v1 (via `gh` CLI). Linear/Jira ajoutables ultérieurement derrière une abstraction `IssueBroker`.
+GitHub only for v1 (via the `gh` CLI). Linear/Jira addable later behind an `IssueBroker` abstraction.
 
-## Décisions de design
+## Design decisions
 
-- **Auto-déclenchement via hook `UserPromptSubmit`** : seule façon d'avoir un vrai trigger automatique sans commande manuelle.
-- **Fast filter sans LLM dans le hook** : <100ms par prompt, coût zéro. La décision fine est déléguée à l'agent `intent-classifier`.
-- **Business-logic-aware** : le classifier lit MEMORY.md, CLAUDE.md et les issues ouvertes avant de trancher. Pas de simples regex sur des verbes d'action.
-- **Multi-feature : split silencieux** par défaut.
-- **Pas de commit/merge automatique en v1** sans validation utilisateur explicite — sécurité d'abord.
+- **Auto-trigger via the `UserPromptSubmit` hook**: the only way to get a true automatic trigger without a manual command.
+- **LLM-free fast filter in the hook**: <100ms per prompt, zero cost. The fine-grained decision is delegated to the `intent-classifier` agent.
+- **Business-logic-aware**: the classifier reads MEMORY.md, CLAUDE.md, and open issues before deciding. No simple regex on action verbs.
+- **Multi-feature: silent split** by default.
+- **No automatic commit/merge in v1** without explicit user confirmation — safety first.
 
 ## Contributing
 
-Les contributions sont bienvenues — issues, PR, retours d'usage sur un vrai projet (c'est justement le Build-5 qui manque).
+Contributions are welcome — issues, PRs, feedback from real-project usage (that's exactly what's missing in Build-5).
 
-- **Langue** : ce repo est en français (README, agents, skill). Garde le contenu destiné au plugin en français pour rester cohérent ; le code (Node.js) et ses commentaires éventuels peuvent rester en anglais si plus naturel.
-- **Pas de build ni de suite de tests** : ce repo est de la config de plugin (Markdown + JSON + petits scripts Node.js), pas une application. Avant d'ouvrir une PR, valide tes changements avec les commandes listées dans [CLAUDE.md](CLAUDE.md#validating-changes) (parsing des manifestes JSON, `node --check` sur les scripts, exercice des CLI `state.js`/`gh-broker.js` contre un dossier temporaire).
-- **Portée des agents** : chaque agent dans `plugins/issue-runner/agents/*.md` a un rôle strict et un contrat d'entrée/sortie JSON — voir [plugins/issue-runner/CLAUDE.md](plugins/issue-runner/CLAUDE.md) avant de toucher à un agent ou au skill d'orchestration. N'élargis pas la liste `tools:` d'un agent au-delà de ce dont il a besoin.
-- **Cross-platform obligatoire** : `hooks/` et `lib/` sont en Node.js pur (zéro dépendance npm) pour tourner sans modification sur Linux/macOS/Windows. Ne réintroduis pas de script spécifique à un OS (PowerShell, bash-only, etc.).
-- **Tester en local** : installe ta version modifiée avec `claude plugin marketplace add /chemin/vers/ton/fork` puis `claude plugin install issue-runner@issue-runner`, et fais tourner le pipeline sur un vrai prompt dans un projet de test avant de proposer la PR.
-- Pour un changement de fond (nouvelle phase, nouveau backend d'issues, etc.), ouvre une issue de discussion avant la PR — ça évite le travail perdu.
+- **No build, no test suite**: this repo is plugin configuration (Markdown + JSON + small Node.js scripts), not an application. Before opening a PR, validate your changes with the commands listed in [CLAUDE.md](CLAUDE.md#validating-changes) (JSON manifest parsing, `node --check` on the scripts, exercising the `state.js`/`gh-broker.js` CLIs against a scratch directory).
+- **Agent scope**: each agent under `plugins/issue-runner/agents/*.md` has a strict role and a JSON input/output contract — see [plugins/issue-runner/CLAUDE.md](plugins/issue-runner/CLAUDE.md) before touching an agent or the orchestration skill. Don't widen an agent's `tools:` list beyond what it needs.
+- **Cross-platform is mandatory**: `hooks/` and `lib/` are pure Node.js (zero npm dependency) so they run unmodified on Linux/macOS/Windows. Don't reintroduce an OS-specific script (PowerShell, bash-only, etc.).
+- **Test locally**: install your modified version with `claude plugin marketplace add /path/to/your/fork` then `claude plugin install issue-runner@issue-runner`, and run the pipeline on a real prompt in a test project before opening the PR.
+- For a substantial change (new phase, new issue backend, etc.), open a discussion issue before the PR — it avoids wasted work.

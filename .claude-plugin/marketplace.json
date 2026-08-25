@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "issue-runner",
-  "description": "Marketplace pour le plugin issue-runner (pipeline Claude Code auto-déclenché : prompt → issue → branche → impl → tests → PR → review → merge).",
+  "description": "Marketplace for the issue-runner plugin (auto-triggered Claude Code pipeline: prompt → issue → branch → impl → tests → PR → review → merge).",
   "owner": {
     "name": "dreykovic",
     "email": "dreybirewa@gmail.com"
