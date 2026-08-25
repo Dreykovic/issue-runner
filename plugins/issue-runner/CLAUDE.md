@@ -51,20 +51,20 @@ Le plugin est écrit en Node.js pur (aucune dépendance npm) pour être installa
 ## Comment ça s'active
 
 1. **L'utilisateur tape un prompt** → Claude Code transmet l'événement `UserPromptSubmit`.
-2. **Le hook `user-prompt-submit.ps1` tourne** (≤100 ms, fast filter sans LLM) :
+2. **Le hook `user-prompt-submit.js` tourne** (≤100 ms, fast filter sans LLM) :
    - Soit il écarte (prompt trop court, slash command, question pure…) → `{continue: true}`
    - Soit il injecte `<issue-runner-active>` en `systemMessage`
 3. **Claude main reçoit le `systemMessage`**. Le skill `issue-runner-orchestration` est dans
    sa liste de skills disponibles ; il l'invoque via le tool Skill pour charger la doctrine.
 4. **Claude main suit la doctrine** : Phase A → B → 1 → … → 9, en spawnant les agents
-   du plugin et en appelant les libs PowerShell.
+   du plugin et en appelant les libs Node.js (`lib/*.js`) via le tool Bash.
 
 ## Voir aussi
 
 - `skills/issue-runner-orchestration/SKILL.md` — pipeline complet, invocations, gates utilisateur
 - `agents/*.md` — chacun des 8 agents avec son rôle, son schéma I/O, ses anti-patterns
-- `hooks/user-prompt-submit.ps1` — logique du fast filter
-- `lib/*.ps1` — gestion d'état + gh CLI
+- `hooks/user-prompt-submit.js` — logique du fast filter
+- `lib/*.js` — config, gestion d'état, wrapper gh CLI (CLI Node, JSON sur stdout)
 
 ## Coût ordre de grandeur (v1)
 

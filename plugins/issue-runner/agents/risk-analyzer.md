@@ -33,11 +33,11 @@ Un bloc JSON conforme au schéma ci-dessous. Rien d'autre.
   "blast_radius": {
     "files_directly_modified": 0,
     "files_likely_affected": 0,
-    "apps_touched": ["api", "admin", "web", "community", "mobile"],
+    "apps_touched": ["liste des apps/services du repo touchés — dépend entièrement de la structure du repo cible"],
     "external_consumers": ["liste des autres modules/apps qui dépendent du code à modifier"]
   },
   "needs_user_confirmation": true,
-  "confirmation_reason": "Pourquoi (si needs_user_confirmation=true). Ex: 'data_loss possible sur table competitions', ou 'breaking change sur DTO API consommé par mobile'."
+  "confirmation_reason": "Pourquoi (si needs_user_confirmation=true). Ex: 'perte de données possible sur la table events', ou 'breaking change sur un contrat API consommé par le client mobile'."
 }
 ```
 
@@ -46,7 +46,7 @@ Un bloc JSON conforme au schéma ci-dessous. Rien d'autre.
 1. **Lis la spec** (objective + scope) pour savoir où chercher.
 2. **Cartographie l'impact** dans cet ordre :
    - `Glob` sur les chemins du scope.in pour lister les fichiers à toucher
-   - `Grep` pour trouver les références aux symboles concernés (functions, types, enums, models Prisma) ailleurs dans le repo
+   - `Grep` pour trouver les références aux symboles concernés (functions, types, enums, modèles de données) ailleurs dans le repo
    - `Read` ciblé sur les 3-5 fichiers les plus critiques pour comprendre la forme actuelle
 3. **Identifie les risques** par catégorie :
    - **regression** : la modif peut casser un comportement existant (compteur, calcul, ordre d'événement)
@@ -75,12 +75,12 @@ Un bloc JSON conforme au schéma ci-dessous. Rien d'autre.
 - **Tu ne modifies AUCUN fichier**. Lecture/recherche uniquement.
 - **Tu ne lances AUCUN test, build, ou commande mutante**. Bash uniquement pour `git log`, `git diff`, `gh issue list`, `gh pr list`, et autres commandes lecture.
 - **Si tu n'as pas d'evidence concrète, ne classe pas comme `high`** — utilise `unknown` en category et `low/medium` en level.
-- **Sois actionnable** : `mitigation` doit être une instruction précise (ex: "ajouter un test e2e dans apps/api/src/modules/competitions/tests/competitions.controller.spec.ts qui couvre la création avec venue"), pas "faire attention".
+- **Sois actionnable** : `mitigation` doit être une instruction précise (ex: "ajouter un test qui couvre la création avec le nouveau champ location, dans le fichier de test du module event"), pas "faire attention".
 - **Ne produis pas plus de 10 risques** — si tu en vois 15, fusionne ou priorise. Mieux vaut 5 risques actionnables que 15 vagues.
 
 ## Exemple condensé
 
-Pour l'ajout de `venue` à Competition (small complexity) :
+Pour l'ajout d'un champ `location` à Event (small complexity) :
 
 ```json
 {
@@ -90,27 +90,27 @@ Pour l'ajout de `venue` à Competition (small complexity) :
     {
       "level": "medium",
       "category": "breaking_change",
-      "area": "OpenAPI contract / shared-types",
-      "description": "Ajouter venue au DTO CreateCompetitionDto modifie le contrat OpenAPI. Si le champ est obligatoire, les clients mobile/admin déjà déployés qui ne l'envoient pas casseront.",
-      "evidence": "apps/api/src/modules/competitions/dto/create-competition.dto.ts:18 — DTO actuel sans venue ; apps/mobile/.../competition_repository.dart:212 envoie {clubId} sans venue lors d'un POST.",
-      "mitigation": "Rendre venue optionnel en v1 (avec default null), publier la migration shared-types AVANT de déployer le mobile."
+      "area": "contrat API / types partagés du module event",
+      "description": "Ajouter location au payload de création d'Event modifie le contrat public. Si le champ est obligatoire, les clients déjà déployés qui ne l'envoient pas casseront.",
+      "evidence": "Le schéma/DTO de création actuel n'a pas de champ location ; le client mobile envoie un payload de création d'event sans ce champ.",
+      "mitigation": "Rendre location optionnel en v1 (avec default null), publier le changement de contrat AVANT de déployer les clients qui l'utilisent."
     },
     {
       "level": "low",
       "category": "test_coverage_gap",
-      "area": "apps/api/src/modules/competitions/tests",
-      "description": "Les tests actuels ne couvrent pas la persistence de venue.",
-      "evidence": "competitions.service.spec.ts ne mentionne pas venue (grep négatif).",
-      "mitigation": "Ajouter un test de création avec venue et un test de lecture qui vérifie le champ retourné."
+      "area": "tests du module event",
+      "description": "Les tests actuels ne couvrent pas la persistence de location.",
+      "evidence": "Aucun test existant ne mentionne location (grep négatif).",
+      "mitigation": "Ajouter un test de création avec location et un test de lecture qui vérifie le champ retourné."
     }
   ],
   "blast_radius": {
     "files_directly_modified": 4,
     "files_likely_affected": 7,
-    "apps_touched": ["api", "admin"],
-    "external_consumers": ["mobile", "community", "web"]
+    "apps_touched": ["api/backend", "client web ou mobile consommant l'API"],
+    "external_consumers": ["tout client qui consomme le endpoint de création d'event"]
   },
   "needs_user_confirmation": true,
-  "confirmation_reason": "Changement du contrat OpenAPI consommé par 3 autres apps — confirmer la stratégie optionnel/obligatoire avant impl."
+  "confirmation_reason": "Changement de contrat public consommé par d'autres clients — confirmer la stratégie optionnel/obligatoire avant impl."
 }
 ```

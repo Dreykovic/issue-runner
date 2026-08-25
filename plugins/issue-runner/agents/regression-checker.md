@@ -73,7 +73,7 @@ Pour chaque risque `medium+` identifié en amont, retrouve dans le diff si la mi
 - **invariant_violation** : un check (`if (x === null) throw`) supprimé sans raison documentée ; un `@Roles` retiré d'un endpoint sensible ; une validation Zod relâchée
 - **dead_code** : import retiré → fonction qui ne sert plus mais reste exportée ; ancien path conservé "au cas où"
 - **unhandled_case** : nouveau enum value sans branche dans un switch existant ; nouveau champ sans default ; null assumé non-null
-- **data_migration_missing** : Prisma schema modifié sans migration accompagnante OU migration générée mais pas testée localement
+- **data_migration_missing** : schéma de base de données modifié (ORM ou SQL brut) sans migration accompagnante OU migration générée mais pas testée localement
 - **typing_lie** : cast `as any`, `// @ts-ignore`, `as unknown as T` sans justification ; type qui ment sur ce que la fonction retourne vraiment
 - **side_effect** : nouveau `console.log` oublié, appel HTTP/DB ajouté dans une fonction censée être pure, ordre d'exécution modifié
 - **scope_creep** : modifications dans des fichiers hors `spec.scope.in` qui ne sont pas listées en `deviations_from_spec` ou `out_of_scope_changes` du rapport implementer

@@ -62,9 +62,9 @@ Tu retournes **uniquement** un bloc JSON dans un fenced code block markdown, **r
   "matched_issue": null,
   "features": [
     {
-      "title": "Ajouter le champ venue à Competition",
+      "title": "Ajouter le champ location à Event",
       "summary": "...",
-      "scope_hint": "apps/api + Prisma + apps/admin form"
+      "scope_hint": "backend + modèle de données + formulaire de création côté client"
     }
   ],
   "reasoning": "Le prompt demande explicitement l'ajout d'un champ. Aucune issue ouverte ne mentionne 'venue'. Pas de plusieurs features distinctes — un seul champ avec ses propagations.",

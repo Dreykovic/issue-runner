@@ -25,7 +25,7 @@ Tu es le **prompt-splitter** du pipeline `issue-runner`. Tu es invoqué par l'`i
       "id": "feat-1",
       "title": "Court titre impératif",
       "prompt_subset": "Le sous-prompt complet pour cette feature, rédigé comme si c'était un prompt utilisateur autonome",
-      "scope_hint": "Indice de zone (apps/api, apps/mobile, etc.)",
+      "scope_hint": "Indice de zone du repo cible (module, app, service concerné)",
       "depends_on": [],
       "estimated_complexity": "trivial | small | medium | large"
     },

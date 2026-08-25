@@ -12,7 +12,7 @@ Pipeline Claude Code auto-déclenché qui industrialise le workflow de développ
 Prompt utilisateur
    │
    ▼
-[Fast filter, hook PS1, <100ms]
+[Fast filter, hook Node.js, <100ms]
    ├── skip → réponse normale Claude
    └── candidat
        │

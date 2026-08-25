@@ -52,40 +52,40 @@ Un bloc JSON conforme au schéma ci-dessous. **Rien d'autre** dans ta sortie. Pa
 ## Règles strictes
 
 - **Ne traduis pas** le prompt en anglais — garde la langue de l'utilisateur dans `objective` et `original_prompt`
-- **Ne complète pas** ce que l'utilisateur n'a pas dit. Si le prompt est "ajoute venue à Competition", ne décide pas tout seul que ça doit être indexé ou que c'est obligatoire — mets-le en `open_questions`
+- **Ne complète pas** ce que l'utilisateur n'a pas dit. Si le prompt est "ajoute location à Event", ne décide pas tout seul que ça doit être indexé ou que c'est obligatoire — mets-le en `open_questions`
 - **Ne pose pas de question à l'utilisateur** — tu produis juste la spec. Si elle a des trous, ils vont dans `open_questions` et l'orchestrateur décidera
 - **Sois conservateur sur `estimated_complexity`** : en cas de doute entre deux niveaux, choisis le plus grand
 - **`acceptance_criteria` doit être testable** : "ça marche" n'est pas un critère, "le formulaire admin propose un champ venue qui est sauvé en DB et affiché en lecture sur le détail compétition" oui
 
 ## Exemple
 
-**Prompt brut** : *"ajoute un champ venue à competition pour le ndroit ou se joue le tournoi"*
+**Prompt brut** : *"ajoute un champ location a l'event pour dire ou ca se passe"*
 
 **Ta sortie** :
 ```json
 {
-  "objective": "Ajouter un champ `venue` au modèle Competition pour stocker l'endroit où se joue le tournoi.",
+  "objective": "Ajouter un champ `location` au modèle Event pour stocker le lieu où se déroule l'événement.",
   "scope": {
-    "in": ["apps/api/prisma/schema.prisma (model Competition)", "apps/api/src/modules/competitions/dto", "apps/admin/src/features/competitions (formulaire création)"],
+    "in": ["couche modèle/schéma du domaine Event", "DTO/validation de création d'Event", "formulaire de création d'Event côté client"],
     "out": []
   },
   "constraints": [
-    "Respecter la stack du projet (Prisma + NestJS + Next.js)",
-    "Respecter les conventions de nommage existantes du module competitions"
+    "Respecter la stack et les conventions déjà en place dans le repo (framework backend, ORM, framework front)",
+    "Respecter les conventions de nommage existantes du module event"
   ],
   "acceptance_criteria": [
-    "Le schéma Prisma contient un champ venue sur Competition",
-    "La migration est générée et appliquée localement",
-    "Le DTO CreateCompetitionDto inclut venue (optionnel ou obligatoire selon réponse à open_question)",
-    "Le formulaire admin propose un champ venue",
+    "Le modèle/schéma de données contient un champ location sur Event",
+    "La migration (si l'ORM en génère) est créée et appliquée localement",
+    "Le payload de création d'Event accepte location",
+    "Le formulaire de création propose un champ location",
     "Les tests existants restent verts"
   ],
   "open_questions": [
-    "Le champ venue est-il obligatoire ou optionnel ?",
+    "Le champ location est-il obligatoire ou optionnel ?",
     "Type souhaité : simple string, ou objet structuré {name, city, address} ?",
-    "Faut-il l'afficher aussi sur les fronts community et web ?"
+    "Faut-il l'afficher aussi ailleurs (liste des événements, détail public) ?"
   ],
   "estimated_complexity": "small",
-  "original_prompt": "ajoute un champ venue à competition pour le ndroit ou se joue le tournoi"
+  "original_prompt": "ajoute un champ location a l'event pour dire ou ca se passe"
 }
 ```
