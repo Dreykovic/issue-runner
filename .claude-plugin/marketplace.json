@@ -1,7 +1,7 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "issue-runner",
-  "description": "Marketplace local pour le plugin issue-runner (pipeline Claude Code auto-déclenché : prompt → issue → branche → impl → tests → PR → review → merge).",
+  "description": "Marketplace pour le plugin issue-runner (pipeline Claude Code auto-déclenché : prompt → issue → branche → impl → tests → PR → review → merge).",
   "owner": {
     "name": "dreykovic",
     "email": "dreybirewa@gmail.com"
@@ -10,13 +10,29 @@
     {
       "name": "issue-runner",
       "description": "Auto-triggered Claude Code pipeline: prompt → issue → branch → impl → tests → PR → review → merge.",
+      "version": "1.0.0",
       "author": {
         "name": "dreykovic",
         "email": "dreybirewa@gmail.com"
       },
       "category": "development",
+      "keywords": [
+        "claude-code",
+        "automation",
+        "ci-cd",
+        "github",
+        "issue-tracking",
+        "pull-request",
+        "code-review",
+        "testing",
+        "ai-agents",
+        "workflow"
+      ],
+      "tags": ["automation", "workflow", "github"],
+      "license": "MIT",
       "source": "./plugins/issue-runner",
-      "homepage": "https://github.com/Dreykovic/issue-runner"
+      "homepage": "https://github.com/Dreykovic/issue-runner",
+      "repository": "https://github.com/Dreykovic/issue-runner"
     }
   ]
 }
